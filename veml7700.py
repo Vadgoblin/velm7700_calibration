@@ -10,6 +10,14 @@ def _check_value(value: int, valid_range, error_msg: str) -> int:
     return value
 
 
+def _unpack(fmt_char: str, source: bytes) -> tuple:
+    """распаковка массива, считанного из датчика.
+    fmt_char: c, b, B, h, H, i, I, l, L, q, Q. pls see: https://docs.python.org/3/library/struct.html"""
+    if len(fmt_char) != 1:
+        raise ValueError(f"Invalid length fmt_char parameter: {len(fmt_char)}")
+    return ustruct.unpack('<' + fmt_char, source)
+
+
 class Veml7700:
     """Class for work with ambient Light Sensor VEML7700.
     Please read: https://www.vishay.com/docs/84286/veml7700.pdf"""
@@ -102,19 +110,6 @@ class Veml7700:
     def read_register(self, reg_addr: int, bytes_count: int) -> bytes:
         return self._i2c.readfrom_mem(self.address, reg_addr, bytes_count)
 
-    def unpack(self, fmt_char: str, source: bytes) -> tuple:
-        """распаковка массива, считанного из датчика.
-        fmt_char: c, b, B, h, H, i, I, l, L, q, Q. pls see: https://docs.python.org/3/library/struct.html"""
-        if len(fmt_char) != 1:
-            raise ValueError(f"Invalid length fmt_char parameter: {len(fmt_char)}")
-        return ustruct.unpack('<' + fmt_char, source)
-
-
-    def _write_register(self, reg_addr, value: int, bytes_count=2) -> None:
-        """записывает данные value в датчик, по адресу reg_addr.
-        bytes_count - кол-во записываемых данных"""
-        self.write_register(reg_addr, value, bytes_count)
-
     def set_config_als(self, gain: int, integration_time: int, persistence: int = 1,
                        interrupt_enable: bool = False, shutdown: bool = False):
         """Установка параметров Датчика Внешней Освещенности (ДВО - ALS).
@@ -126,8 +121,8 @@ class Veml7700:
         _cfg = 0
         # перед любой перенастройкой, документация требует перевода датчика в режим ожидания
         _bts = self.read_register(0x00, 2) # читаю
-        _cfg = self.unpack("H", _bts)[0]
-        self._write_register(0x00, _cfg | 0x01, 2)  # записываю
+        _cfg = _unpack("H", _bts)[0]
+        self.write_register(0x00, _cfg | 0x01, 2)  # записываю
 
         _cfg = 0
         gain = _check_value(gain, range(4), f"Invalid als gain value: {gain}")
@@ -148,7 +143,7 @@ class Veml7700:
         _cfg |= it << 6
         _cfg |= gain << 11
 
-        self._write_register(0x00, _cfg, 2)
+        self.write_register(0x00, _cfg, 2)
         # save
         self._als_gain = gain
         self._als_it = integration_time
@@ -159,7 +154,7 @@ class Veml7700:
     def get_config_als(self) -> None:
         """read ALS config from register (2 byte)"""
         reg_val = self.read_register(0x00, 2)
-        cfg = self.unpack("H", reg_val)[0]  # unsigned short
+        cfg = _unpack("H", reg_val)[0]  # unsigned short
         #
         tmp = (cfg & 0b0001_1000_0000_0000) >> 11  # gain
         self._als_gain = tmp
@@ -182,7 +177,7 @@ class Veml7700:
         reg_val = 0
         reg_val |= int(enable_psm)
         reg_val |= psm << 1
-        self._write_register(0x03, reg_val, 2)
+        self.write_register(0x03, reg_val, 2)
         self._enable_psm = enable_psm
         self._psm = psm
 
@@ -190,7 +185,7 @@ class Veml7700:
         """Return interrupt flags while trigger occurred due to data crossing low/high threshold windows.
         tuple (low_threshold, high_threshold)."""
         reg_val = self.read_register(0x06, 2)
-        irq_status = self.unpack("H", reg_val)[0]  # unsigned short
+        irq_status = _unpack("H", reg_val)[0]  # unsigned short
         # Bit 15 defines interrupt flag while trigger occurred due to data crossing low threshold windows.
         int_th_low = bool(irq_status & 0b1000_0000_0000_0000)
         # Bit 14 defines interrupt flag while trigger occurred due to data crossing high threshold windows.
@@ -200,7 +195,7 @@ class Veml7700:
     def get_illumination(self, raw = False) -> float:
         """return illumination in lux"""
         reg_val = self.read_register(0x04, 2)
-        raw_lux = self.unpack("H", reg_val)[0]
+        raw_lux = _unpack("H", reg_val)[0]
         self._last_raw_ill = raw_lux
         if raw:
             return raw_lux
@@ -209,17 +204,17 @@ class Veml7700:
     def get_white_channel(self):
         """Return white channel output data"""
         reg_val = self.read_register(0x05, 2)
-        return self.unpack("H", reg_val)[0]
+        return _unpack("H", reg_val)[0]
 
     def get_high_threshold(self) -> int:
         """Return ALS high threshold window setting"""
         reg_val = self.read_register(0x01, 2)
-        return self.unpack("H", reg_val)[0]
+        return _unpack("H", reg_val)[0]
 
     def get_low_threshold(self) -> int:
         """Return ALS low threshold window setting"""
         reg_val = self.read_register(0x02, 2)
-        return self.unpack("H", reg_val)[0]
+        return _unpack("H", reg_val)[0]
 
     @property
     def last_raw(self)->int:
