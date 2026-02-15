@@ -1,24 +1,27 @@
 import micropython
 import ustruct
-from sensor_pack import bus_service
-
+from machine import I2C
 
 class BaseSensor:
-    """Base sensor class"""
 
-    def __init__(self, adapter: bus_service.BusAdapter, address: int, big_byte_order: bool):
-        """Базовый класс Датчик.
-        Если big_byte_order равен True -> порядок байтов в регистрах датчика «big»
-        (Порядок от старшего к младшему), в противном случае порядок байтов в регистрах "little"
-        (Порядок от младшего к старшему)
-        address - адрес датчика на шине.
-
-        Base sensor class. if big_byte_order is True -> register values byteorder is 'big'
-        else register values byteorder is 'little'
-        address - address of the sensor on the bus."""
-        self.adapter = adapter
+    def __init__(self, i2c: I2C, address: int, big_byte_order: bool):
+        self._i2c = i2c
         self.address = address
         self.big_byte_order = big_byte_order
+
+    def write_register(self, device_addr: int, reg_addr: int, value: int,
+                       bytes_count: int, byte_order: str) -> None:
+        buf = value.to_bytes(bytes_count, byte_order)
+        self._i2c.writeto_mem(device_addr, reg_addr, buf)
+
+    def read_register(self, device_addr: int, reg_addr: int, bytes_count: int) -> bytes:
+        return self._i2c.readfrom_mem(device_addr, reg_addr, bytes_count)
+
+    def read(self, device_addr, n_bytes: int) -> bytes:
+        return self._i2c.readfrom(device_addr, n_bytes)
+
+    def write(self, device_addr, buf: bytes):
+        return self._i2c.writeto(device_addr, buf)
 
     def _get_byteorder_as_str(self) -> tuple:
         """Return byteorder as string"""
@@ -133,9 +136,8 @@ class Veml7700(BaseSensor, Iterator):
         _k = _gain / _g_base
         return (_max_res / 2 ** raw_it) / _k
 
-    def __init__(self, adapter: bus_service.I2cAdapter, address: int = 0x10):
-        """  """
-        super().__init__(adapter, address, False)
+    def __init__(self, i2c:I2C, address: int = 0x10):
+        super().__init__(i2c, address, False)
         self._last_raw_ill =None    # хранит последнее, считанное из датчика, сырое значение освещенности
         self._als_gain = 0           # gain
         self._als_it = 0             # integration time
@@ -148,13 +150,13 @@ class Veml7700(BaseSensor, Iterator):
     def _read_register(self, reg_addr, bytes_count=2) -> bytes:
         """считывает из регистра датчика значение.
         bytes_count - размер значения в байтах"""
-        return self.adapter.read_register(self.address, reg_addr, bytes_count)
+        return self.read_register(self.address, reg_addr, bytes_count)
 
-    def _write_register(self, reg_addr, value: int, bytes_count=2) -> int:
+    def _write_register(self, reg_addr, value: int, bytes_count=2) -> None:
         """записывает данные value в датчик, по адресу reg_addr.
         bytes_count - кол-во записываемых данных"""
         byte_order = self._get_byteorder_as_str()[0]
-        return self.adapter.write_register(self.address, reg_addr, value, bytes_count, byte_order)
+        self.write_register(self.address, reg_addr, value, bytes_count, byte_order)
 
     def set_config_als(self, gain: int, integration_time: int, persistence: int = 1,
                        interrupt_enable: bool = False, shutdown: bool = False):
@@ -238,7 +240,7 @@ class Veml7700(BaseSensor, Iterator):
         int_th_high = bool(irq_status & 0b0100_0000_0000_0000)
         return int_th_low, int_th_high
 
-    def get_illumination(self, raw = False) -> [int, float]:
+    def get_illumination(self, raw = False) -> float:
         """return illumination in lux"""
         reg_val = self._read_register(0x04, 2)
         raw_lux = self.unpack("H", reg_val)[0]

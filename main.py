@@ -1,12 +1,10 @@
 from machine import I2C, Pin
 from veml7700 import Veml7700
-from sensor_pack.bus_service import I2cAdapter
 import time
 
 if __name__ == '__main__':
     i2c = I2C(0, scl=Pin(1), sda=Pin(0), freq=400_000)
-    adaptor = I2cAdapter(i2c)
-    sol = Veml7700(adaptor)
+    sol = Veml7700(i2c)
 
     # _g = 1, 2, 0.125, 0.25
     # 25 * 2 ** raw_it
