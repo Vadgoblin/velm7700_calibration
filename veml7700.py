@@ -42,19 +42,7 @@ class BaseSensor:
     def is_big_byteorder(self) -> bool:
         return self.big_byte_order
 
-    def get_id(self):
-        raise NotImplementedError
 
-    def soft_reset(self):
-        raise NotImplementedError
-
-
-class Iterator:
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        raise NotImplementedError
 
 @micropython.native
 def _check_value(value: int, valid_range, error_msg: str) -> int:
@@ -63,7 +51,7 @@ def _check_value(value: int, valid_range, error_msg: str) -> int:
     return value
 
 
-class Veml7700(BaseSensor, Iterator):
+class Veml7700(BaseSensor):
     """Class for work with ambient Light Sensor VEML7700.
     Please read: https://www.vishay.com/docs/84286/veml7700.pdf"""
     _IT = 12, 8, 0, 1, 2, 3     # integration time const
@@ -276,6 +264,9 @@ class Veml7700(BaseSensor, Iterator):
     def last_raw(self)->int:
         """Возвращает последнее, считанное из датчика, сырое значение освещенности"""
         return self._last_raw_ill
+
+    def __iter__(self):
+            return self
 
     def __next__(self) -> float:
         return self.get_illumination(raw=False)
