@@ -4,14 +4,12 @@ from machine import I2C
 
 class BaseSensor:
 
-    def __init__(self, i2c: I2C, address: int, big_byte_order: bool):
+    def __init__(self, i2c: I2C, address: int):
         self._i2c = i2c
         self.address = address
-        self.big_byte_order = big_byte_order
 
-    def write_register(self, device_addr: int, reg_addr: int, value: int,
-                       bytes_count: int, byte_order: str) -> None:
-        buf = value.to_bytes(bytes_count, byte_order)
+    def write_register(self, device_addr: int, reg_addr: int, value: int, bytes_count: int) -> None:
+        buf = value.to_bytes(bytes_count, "little")
         self._i2c.writeto_mem(device_addr, reg_addr, buf)
 
     def read_register(self, device_addr: int, reg_addr: int, bytes_count: int) -> bytes:
@@ -23,24 +21,12 @@ class BaseSensor:
     def write(self, device_addr, buf: bytes):
         return self._i2c.writeto(device_addr, buf)
 
-    def _get_byteorder_as_str(self) -> tuple:
-        """Return byteorder as string"""
-        if self.is_big_byteorder():
-            return 'big', '>'
-        else:
-            return 'little', '<'
-
     def unpack(self, fmt_char: str, source: bytes) -> tuple:
         """распаковка массива, считанного из датчика.
         fmt_char: c, b, B, h, H, i, I, l, L, q, Q. pls see: https://docs.python.org/3/library/struct.html"""
         if len(fmt_char) != 1:
             raise ValueError(f"Invalid length fmt_char parameter: {len(fmt_char)}")
-        bo = self._get_byteorder_as_str()[1]
-        return ustruct.unpack(bo + fmt_char, source)
-
-    @micropython.native
-    def is_big_byteorder(self) -> bool:
-        return self.big_byte_order
+        return ustruct.unpack('<' + fmt_char, source)
 
 
 
@@ -125,7 +111,7 @@ class Veml7700(BaseSensor):
         return (_max_res / 2 ** raw_it) / _k
 
     def __init__(self, i2c:I2C, address: int = 0x10):
-        super().__init__(i2c, address, False)
+        super().__init__(i2c, address)
         self._last_raw_ill =None    # хранит последнее, считанное из датчика, сырое значение освещенности
         self._als_gain = 0           # gain
         self._als_it = 0             # integration time
@@ -143,8 +129,7 @@ class Veml7700(BaseSensor):
     def _write_register(self, reg_addr, value: int, bytes_count=2) -> None:
         """записывает данные value в датчик, по адресу reg_addr.
         bytes_count - кол-во записываемых данных"""
-        byte_order = self._get_byteorder_as_str()[0]
-        self.write_register(self.address, reg_addr, value, bytes_count, byte_order)
+        self.write_register(self.address, reg_addr, value, bytes_count)
 
     def set_config_als(self, gain: int, integration_time: int, persistence: int = 1,
                        interrupt_enable: bool = False, shutdown: bool = False):
