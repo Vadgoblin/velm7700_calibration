@@ -95,18 +95,12 @@ class Veml7700:
         self._enable_psm = False     # Enable power save mode for sensor
         self._psm = 0                # power save mode for sensor 0..3
 
-    def write_register(self, device_addr: int, reg_addr: int, value: int, bytes_count: int) -> None:
+    def write_register(self, reg_addr: int, value: int, bytes_count: int) -> None:
         buf = value.to_bytes(bytes_count, "little")
-        self._i2c.writeto_mem(device_addr, reg_addr, buf)
+        self._i2c.writeto_mem(self.address, reg_addr, buf)
 
-    def read_register(self, device_addr: int, reg_addr: int, bytes_count: int) -> bytes:
-        return self._i2c.readfrom_mem(device_addr, reg_addr, bytes_count)
-
-    def read(self, device_addr, n_bytes: int) -> bytes:
-        return self._i2c.readfrom(device_addr, n_bytes)
-
-    def write(self, device_addr, buf: bytes):
-        return self._i2c.writeto(device_addr, buf)
+    def read_register(self, reg_addr: int, bytes_count: int) -> bytes:
+        return self._i2c.readfrom_mem(self.address, reg_addr, bytes_count)
 
     def unpack(self, fmt_char: str, source: bytes) -> tuple:
         """распаковка массива, считанного из датчика.
@@ -116,15 +110,10 @@ class Veml7700:
         return ustruct.unpack('<' + fmt_char, source)
 
 
-    def _read_register(self, reg_addr, bytes_count=2) -> bytes:
-        """считывает из регистра датчика значение.
-        bytes_count - размер значения в байтах"""
-        return self.read_register(self.address, reg_addr, bytes_count)
-
     def _write_register(self, reg_addr, value: int, bytes_count=2) -> None:
         """записывает данные value в датчик, по адресу reg_addr.
         bytes_count - кол-во записываемых данных"""
-        self.write_register(self.address, reg_addr, value, bytes_count)
+        self.write_register(reg_addr, value, bytes_count)
 
     def set_config_als(self, gain: int, integration_time: int, persistence: int = 1,
                        interrupt_enable: bool = False, shutdown: bool = False):
@@ -136,7 +125,7 @@ class Veml7700:
         """
         _cfg = 0
         # перед любой перенастройкой, документация требует перевода датчика в режим ожидания
-        _bts = self._read_register(0x00, 2) # читаю
+        _bts = self.read_register(0x00, 2) # читаю
         _cfg = self.unpack("H", _bts)[0]
         self._write_register(0x00, _cfg | 0x01, 2)  # записываю
 
@@ -169,7 +158,7 @@ class Veml7700:
 
     def get_config_als(self) -> None:
         """read ALS config from register (2 byte)"""
-        reg_val = self._read_register(0x00, 2)
+        reg_val = self.read_register(0x00, 2)
         cfg = self.unpack("H", reg_val)[0]  # unsigned short
         #
         tmp = (cfg & 0b0001_1000_0000_0000) >> 11  # gain
@@ -200,7 +189,7 @@ class Veml7700:
     def get_interrupt_status(self) -> tuple:
         """Return interrupt flags while trigger occurred due to data crossing low/high threshold windows.
         tuple (low_threshold, high_threshold)."""
-        reg_val = self._read_register(0x06, 2)
+        reg_val = self.read_register(0x06, 2)
         irq_status = self.unpack("H", reg_val)[0]  # unsigned short
         # Bit 15 defines interrupt flag while trigger occurred due to data crossing low threshold windows.
         int_th_low = bool(irq_status & 0b1000_0000_0000_0000)
@@ -210,7 +199,7 @@ class Veml7700:
 
     def get_illumination(self, raw = False) -> float:
         """return illumination in lux"""
-        reg_val = self._read_register(0x04, 2)
+        reg_val = self.read_register(0x04, 2)
         raw_lux = self.unpack("H", reg_val)[0]
         self._last_raw_ill = raw_lux
         if raw:
@@ -219,26 +208,18 @@ class Veml7700:
 
     def get_white_channel(self):
         """Return white channel output data"""
-        reg_val = self._read_register(0x05, 2)
+        reg_val = self.read_register(0x05, 2)
         return self.unpack("H", reg_val)[0]
 
     def get_high_threshold(self) -> int:
         """Return ALS high threshold window setting"""
-        reg_val = self._read_register(0x01, 2)
+        reg_val = self.read_register(0x01, 2)
         return self.unpack("H", reg_val)[0]
 
     def get_low_threshold(self) -> int:
         """Return ALS low threshold window setting"""
-        reg_val = self._read_register(0x02, 2)
+        reg_val = self.read_register(0x02, 2)
         return self.unpack("H", reg_val)[0]
-
-    def get_id(self):
-        """No ID support in sensor!"""
-        return None
-
-    def soft_reset(self):
-        """Software reset."""
-        return None
 
     @property
     def last_raw(self)->int:
