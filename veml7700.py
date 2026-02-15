@@ -21,7 +21,11 @@ def _unpack(fmt_char: str, source: bytes) -> tuple:
 class Veml7700:
     """Class for work with ambient Light Sensor VEML7700.
     Please read: https://www.vishay.com/docs/84286/veml7700.pdf"""
-    _IT = 12, 8, 0, 1, 2, 3     # integration time const
+
+    GAIN = (0.125, 0.25, 1, 2)
+    INTEGRATION_TIME = (25, 50, 100, 200, 400, 800)
+
+    _IT = 12, 8, 0, 1, 2, 3  # integration time const
 
     @staticmethod
     def _it_to_raw_it(it: int) -> int:
@@ -91,17 +95,17 @@ class Veml7700:
         _k = _gain / _g_base
         return (_max_res / 2 ** raw_it) / _k
 
-    def __init__(self, i2c:I2C, address: int = 0x10):
+    def __init__(self, i2c: I2C, address: int = 0x10):
         self._i2c = i2c
         self.address = address
-        self._last_raw_ill =None    # хранит последнее, считанное из датчика, сырое значение освещенности
-        self._als_gain = 0           # gain
-        self._als_it = 0             # integration time
-        self._als_pers = 0           # persistence protect number setting
-        self._als_int_en = False     # interrupt enable setting
-        self._als_shutdown = False   # ALS shut down setting
-        self._enable_psm = False     # Enable power save mode for sensor
-        self._psm = 0                # power save mode for sensor 0..3
+        self._last_raw_ill = None  # хранит последнее, считанное из датчика, сырое значение освещенности
+        self._als_gain = 0  # gain
+        self._als_it = 0  # integration time
+        self._als_pers = 0  # persistence protect number setting
+        self._als_int_en = False  # interrupt enable setting
+        self._als_shutdown = False  # ALS shut down setting
+        self._enable_psm = False  # Enable power save mode for sensor
+        self._psm = 0  # power save mode for sensor 0..3
 
     def write_register(self, reg_addr: int, value: int, bytes_count: int) -> None:
         buf = value.to_bytes(bytes_count, "little")
@@ -120,14 +124,14 @@ class Veml7700:
         """
         _cfg = 0
         # перед любой перенастройкой, документация требует перевода датчика в режим ожидания
-        _bts = self.read_register(0x00, 2) # читаю
+        _bts = self.read_register(0x00, 2)  # читаю
         _cfg = _unpack("H", _bts)[0]
         self.write_register(0x00, _cfg | 0x01, 2)  # записываю
 
         _cfg = 0
         gain = _check_value(gain, range(4), f"Invalid als gain value: {gain}")
         _tmp = _check_value(integration_time, range(6), f"Invalid als integration_time: {integration_time}")
-        it = Veml7700._it_to_raw_it(_tmp)    # integration_time
+        it = Veml7700._it_to_raw_it(_tmp)  # integration_time
 
         pers = _check_value(persistence, range(4), f"Invalid als persistence protect number: {persistence}")
         ie = 0
@@ -163,7 +167,7 @@ class Veml7700:
         self._als_it = Veml7700._raw_it_to_it(tmp)
 
         tmp = (cfg & 0b0000_0000_0011_0000) >> 4  # persistence protect number setting
-        self._als_pers = tmp     # 2 ** tmp
+        self._als_pers = tmp  # 2 ** tmp
         #
         self._als_int_en = bool(cfg & 0b0000_0000_0000_0010)
         self._als_shutdown = bool(cfg & 0b0000_0000_0000_0001)
@@ -192,7 +196,7 @@ class Veml7700:
         int_th_high = bool(irq_status & 0b0100_0000_0000_0000)
         return int_th_low, int_th_high
 
-    def get_illumination(self, raw = False) -> float:
+    def get_illumination(self, raw=False) -> float:
         """return illumination in lux"""
         reg_val = self.read_register(0x04, 2)
         raw_lux = _unpack("H", reg_val)[0]
@@ -217,12 +221,23 @@ class Veml7700:
         return _unpack("H", reg_val)[0]
 
     @property
-    def last_raw(self)->int:
-        """Возвращает последнее, считанное из датчика, сырое значение освещенности"""
+    def last_raw(self) -> int:
         return self._last_raw_ill
 
+    @property
+    def gain(self) -> tuple[int, float]:
+        """Возвращает коэффициент усиления (raw_gain, gain)"""
+        rg = self._als_gain
+        return rg, Veml7700._raw_gain_to_gain(rg)
+
+    @property
+    def integration_time(self) -> tuple[int, int]:
+        """Возвращает время интегрирования (raw_integration_time, integration_time_ms)"""
+        rit = self._als_it
+        return rit, self._get_integration_time(rit)
+
     def __iter__(self):
-            return self
+        return self
 
     def __next__(self) -> float:
         return self.get_illumination(raw=False)
@@ -238,19 +253,5 @@ class Veml7700:
         base = 25 * 2 ** self._als_it
         if not self._enable_psm:
             return base
-        # весь код ниже этой строки в этой функции под вопросом. документация на Veml7700
-        # не позволяет мне понять алгоритм вычисления времени преобразования датчика при включенном режиме
-        # экономии электроэнергии (power save mode)!
+
         return offset + base + 500 * (2 ** self._psm)
-
-    @property
-    def gain(self) -> tuple[int, float]:
-        """Возвращает коэффициент усиления (raw_gain, gain)"""
-        rg = self._als_gain
-        return rg, Veml7700._raw_gain_to_gain(rg)
-
-    @property
-    def integration_time(self) -> tuple[int, int]:
-        """Возвращает время интегрирования (raw_integration_time, integration_time_ms)"""
-        rit = self._als_it
-        return rit, self._get_integration_time(rit)
