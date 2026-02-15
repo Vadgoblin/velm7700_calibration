@@ -2,33 +2,6 @@ import micropython
 import ustruct
 from machine import I2C
 
-class BaseSensor:
-
-    def __init__(self, i2c: I2C, address: int):
-        self._i2c = i2c
-        self.address = address
-
-    def write_register(self, device_addr: int, reg_addr: int, value: int, bytes_count: int) -> None:
-        buf = value.to_bytes(bytes_count, "little")
-        self._i2c.writeto_mem(device_addr, reg_addr, buf)
-
-    def read_register(self, device_addr: int, reg_addr: int, bytes_count: int) -> bytes:
-        return self._i2c.readfrom_mem(device_addr, reg_addr, bytes_count)
-
-    def read(self, device_addr, n_bytes: int) -> bytes:
-        return self._i2c.readfrom(device_addr, n_bytes)
-
-    def write(self, device_addr, buf: bytes):
-        return self._i2c.writeto(device_addr, buf)
-
-    def unpack(self, fmt_char: str, source: bytes) -> tuple:
-        """распаковка массива, считанного из датчика.
-        fmt_char: c, b, B, h, H, i, I, l, L, q, Q. pls see: https://docs.python.org/3/library/struct.html"""
-        if len(fmt_char) != 1:
-            raise ValueError(f"Invalid length fmt_char parameter: {len(fmt_char)}")
-        return ustruct.unpack('<' + fmt_char, source)
-
-
 
 @micropython.native
 def _check_value(value: int, valid_range, error_msg: str) -> int:
@@ -37,7 +10,7 @@ def _check_value(value: int, valid_range, error_msg: str) -> int:
     return value
 
 
-class Veml7700(BaseSensor):
+class Veml7700:
     """Class for work with ambient Light Sensor VEML7700.
     Please read: https://www.vishay.com/docs/84286/veml7700.pdf"""
     _IT = 12, 8, 0, 1, 2, 3     # integration time const
@@ -111,7 +84,8 @@ class Veml7700(BaseSensor):
         return (_max_res / 2 ** raw_it) / _k
 
     def __init__(self, i2c:I2C, address: int = 0x10):
-        super().__init__(i2c, address)
+        self._i2c = i2c
+        self.address = address
         self._last_raw_ill =None    # хранит последнее, считанное из датчика, сырое значение освещенности
         self._als_gain = 0           # gain
         self._als_it = 0             # integration time
@@ -120,6 +94,27 @@ class Veml7700(BaseSensor):
         self._als_shutdown = False   # ALS shut down setting
         self._enable_psm = False     # Enable power save mode for sensor
         self._psm = 0                # power save mode for sensor 0..3
+
+    def write_register(self, device_addr: int, reg_addr: int, value: int, bytes_count: int) -> None:
+        buf = value.to_bytes(bytes_count, "little")
+        self._i2c.writeto_mem(device_addr, reg_addr, buf)
+
+    def read_register(self, device_addr: int, reg_addr: int, bytes_count: int) -> bytes:
+        return self._i2c.readfrom_mem(device_addr, reg_addr, bytes_count)
+
+    def read(self, device_addr, n_bytes: int) -> bytes:
+        return self._i2c.readfrom(device_addr, n_bytes)
+
+    def write(self, device_addr, buf: bytes):
+        return self._i2c.writeto(device_addr, buf)
+
+    def unpack(self, fmt_char: str, source: bytes) -> tuple:
+        """распаковка массива, считанного из датчика.
+        fmt_char: c, b, B, h, H, i, I, l, L, q, Q. pls see: https://docs.python.org/3/library/struct.html"""
+        if len(fmt_char) != 1:
+            raise ValueError(f"Invalid length fmt_char parameter: {len(fmt_char)}")
+        return ustruct.unpack('<' + fmt_char, source)
+
 
     def _read_register(self, reg_addr, bytes_count=2) -> bytes:
         """считывает из регистра датчика значение.
