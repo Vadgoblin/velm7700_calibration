@@ -1,6 +1,7 @@
 import micropython
 import ustruct
 from machine import I2C
+import math
 
 
 @micropython.native
@@ -43,11 +44,6 @@ class Veml7700:
         return Veml7700._IT[it]
 
     @staticmethod
-    def _raw_it_to_it(raw_it: int) -> int:
-        """Метод обратный методу _it_to_raw_it"""
-        return Veml7700._IT.index(raw_it)
-
-    @staticmethod
     def _get_integration_time(raw_it: int) -> int:
         """Возвращает время интегрирования, в миллисекундах, по сырому значению raw_it (0..5)"""
         return 25 * 2 ** raw_it
@@ -66,16 +62,11 @@ class Veml7700:
             raise ValueError(f"Invalid _gain value: {_gain}")
         return _gain
 
-    @staticmethod
-    def _check_raw(raw_gain: int, raw_it: int):
-        _check_value(raw_gain, range(4), f"Invalid als gain value: {raw_gain}")
-        _check_value(raw_it, range(6), f"Invalid als raw integration_time: {raw_it}")
 
     @staticmethod
     def get_max_possible_illumination(raw_gain: int, raw_it: int) -> float:
         """Возвращает максимально возможный уровень освещенности в lux в
         зависимости от сырого значения усиления (raw_gain 0..3) и времени интегрирования (сырое значение 0..5) """
-        Veml7700._check_raw(raw_gain, raw_it)
         #
         _gain = Veml7700._raw_gain_to_gain(raw_gain)
         _g_base = 0.125
@@ -84,28 +75,49 @@ class Veml7700:
         return (_max_ill / 2 ** raw_it) / _k
 
     @staticmethod
-    def _get_resolution(raw_gain: int, raw_it: int) -> float:
-        """Возвращает разрешение младшего разряда в [lux] по сырому значению усиления (gain 0..3) и
-        по it_raw (сырые значения) 0..5"""
-        Veml7700._check_raw(raw_gain, raw_it)
-        #
-        _gain = Veml7700._raw_gain_to_gain(raw_gain)
+    def _get_resolution(gain: int, it: int) -> float:
+        raw_it = math.log2(it/25)
         _g_base = 0.125
         _max_res = 1.8432
-        _k = _gain / _g_base
+        _k = gain / _g_base
         return (_max_res / 2 ** raw_it) / _k
 
     def __init__(self, i2c: I2C, address: int = 0x10):
         self._i2c = i2c
         self.address = address
-        self._last_raw_ill = None  # хранит последнее, считанное из датчика, сырое значение освещенности
-        self._als_gain = 0  # gain
-        self._als_it = 0  # integration time
-        self._als_pers = 0  # persistence protect number setting
-        self._als_int_en = False  # interrupt enable setting
-        self._als_shutdown = False  # ALS shut down setting
+        self._gain = 1
+        self._it = 200
+
         self._enable_psm = False  # Enable power save mode for sensor
         self._psm = 0  # power save mode for sensor 0..3
+
+    def set_gain(self, new_gain):
+        if new_gain not in self.GAIN:
+            raise Exception("Invalid gain value")
+        self._gain = new_gain
+        self._update_als()
+
+    def get_gain(self):
+        return self._gain
+
+    def set_it(self, new_it):
+        if new_it not in self.INTEGRATION_TIME:
+            raise Exception("Invalid it value")
+        self._it = new_it
+        self._update_als()
+
+    def get_it(self):
+        return self._it
+
+    def _update_als(self):
+        gain_mapper = {1:0, 2:1, 0.125:2, 0.25: 3}
+        als_gain = gain_mapper[self._gain]
+
+        als_it = 0
+        als_pers = 0
+        als_int_en = False
+        als_shutdown = False
+        self.set_config_als(als_gain,als_it, als_pers,als_int_en,als_shutdown)
 
     def write_register(self, reg_addr: int, value: int, bytes_count: int) -> None:
         buf = value.to_bytes(bytes_count, "little")
@@ -116,8 +128,7 @@ class Veml7700:
 
     def set_config_als(self, gain: int, integration_time: int, persistence: int = 1,
                        interrupt_enable: bool = False, shutdown: bool = False):
-        """Установка параметров Датчика Внешней Освещенности (ДВО - ALS).
-        Setting Ambient Light Sensor (ALS) parameters.
+        """Setting Ambient Light Sensor (ALS) parameters.
         gain = 0..3; 0-gain=1, 1-gain=2, 2-gain=0.125(1/8), 3-gain=0.25(1/4).
         integration_time = 0..5; 0-25 ms; 1-50 ms; 2-100 ms, 3-200 ms, 4-400 ms, 5-800 ms
         persistence protect number = 0..3; 0-1, 1-2, 2-4, 3-8
@@ -148,110 +159,64 @@ class Veml7700:
         _cfg |= gain << 11
 
         self.write_register(0x00, _cfg, 2)
-        # save
-        self._als_gain = gain
-        self._als_it = integration_time
-        self._als_pers = pers
-        self._als_int_en = interrupt_enable
-        self._als_shutdown = shutdown
 
-    def get_config_als(self) -> None:
-        """read ALS config from register (2 byte)"""
-        reg_val = self.read_register(0x00, 2)
-        cfg = _unpack("H", reg_val)[0]  # unsigned short
-        #
-        tmp = (cfg & 0b0001_1000_0000_0000) >> 11  # gain
-        self._als_gain = tmp
 
-        tmp = (cfg & 0b0000_0011_1100_0000) >> 6  # integration time setting
-        self._als_it = Veml7700._raw_it_to_it(tmp)
+    # def get_config_als(self) -> None:
+    #     """read ALS config from register (2 byte)"""
+    #     reg_val = self.read_register(0x00, 2)
+    #     cfg = _unpack("H", reg_val)[0]  # unsigned short
+    #     #
+    #     tmp = (cfg & 0b0001_1000_0000_0000) >> 11  # gain
+    #     self._als_gain = tmp
+    #
+    #     tmp = (cfg & 0b0000_0011_1100_0000) >> 6  # integration time setting
+    #     self._als_it = Veml7700._raw_it_to_it(tmp)
+    #
+    #     tmp = (cfg & 0b0000_0000_0011_0000) >> 4  # persistence protect number setting
+    #     self._als_pers = tmp  # 2 ** tmp
+    #     #
+    #     self._als_int_en = bool(cfg & 0b0000_0000_0000_0010)
+    #     self._als_shutdown = bool(cfg & 0b0000_0000_0000_0001)
 
-        tmp = (cfg & 0b0000_0000_0011_0000) >> 4  # persistence protect number setting
-        self._als_pers = tmp  # 2 ** tmp
-        #
-        self._als_int_en = bool(cfg & 0b0000_0000_0000_0010)
-        self._als_shutdown = bool(cfg & 0b0000_0000_0000_0001)
-
-    def set_power_save_mode(self, enable_psm: bool, psm: int) -> None:
-        """Set power save mode for sensor.
-        enable_psm (Power saving mode enable): False - disable, True - enable
-        psm (Power saving mode; see table “Refresh time”): 0, 1, 2, 3
-        """
-        psm = _check_value(psm, range(4), f"Invalid power save mode value: {psm}")
-        reg_val = 0
-        reg_val |= int(enable_psm)
-        reg_val |= psm << 1
-        self.write_register(0x03, reg_val, 2)
-        self._enable_psm = enable_psm
-        self._psm = psm
-
-    def get_interrupt_status(self) -> tuple:
-        """Return interrupt flags while trigger occurred due to data crossing low/high threshold windows.
-        tuple (low_threshold, high_threshold)."""
-        reg_val = self.read_register(0x06, 2)
-        irq_status = _unpack("H", reg_val)[0]  # unsigned short
-        # Bit 15 defines interrupt flag while trigger occurred due to data crossing low threshold windows.
-        int_th_low = bool(irq_status & 0b1000_0000_0000_0000)
-        # Bit 14 defines interrupt flag while trigger occurred due to data crossing high threshold windows.
-        int_th_high = bool(irq_status & 0b0100_0000_0000_0000)
-        return int_th_low, int_th_high
+    # def set_power_save_mode(self, enable_psm: bool, psm: int) -> None:
+    #     """Set power save mode for sensor.
+    #     enable_psm (Power saving mode enable): False - disable, True - enable
+    #     psm (Power saving mode; see table “Refresh time”): 0, 1, 2, 3
+    #     """
+    #     psm = _check_value(psm, range(4), f"Invalid power save mode value: {psm}")
+    #     reg_val = 0
+    #     reg_val |= int(enable_psm)
+    #     reg_val |= psm << 1
+    #     self.write_register(0x03, reg_val, 2)
+    #     self._enable_psm = enable_psm
+    #     self._psm = psm
+    #
+    # def get_interrupt_status(self) -> tuple:
+    #     """Return interrupt flags while trigger occurred due to data crossing low/high threshold windows.
+    #     tuple (low_threshold, high_threshold)."""
+    #     reg_val = self.read_register(0x06, 2)
+    #     irq_status = _unpack("H", reg_val)[0]  # unsigned short
+    #     # Bit 15 defines interrupt flag while trigger occurred due to data crossing low threshold windows.
+    #     int_th_low = bool(irq_status & 0b1000_0000_0000_0000)
+    #     # Bit 14 defines interrupt flag while trigger occurred due to data crossing high threshold windows.
+    #     int_th_high = bool(irq_status & 0b0100_0000_0000_0000)
+    #     return int_th_low, int_th_high
 
     def get_illumination(self, raw=False) -> float:
         """return illumination in lux"""
         reg_val = self.read_register(0x04, 2)
         raw_lux = _unpack("H", reg_val)[0]
-        self._last_raw_ill = raw_lux
         if raw:
             return raw_lux
-        return raw_lux * Veml7700._get_resolution(self._als_gain, self._als_it)
+        return raw_lux * Veml7700._get_resolution(self._gain, self._it)
 
     def get_white_channel(self):
         """Return white channel output data"""
         reg_val = self.read_register(0x05, 2)
         return _unpack("H", reg_val)[0]
 
-    def get_high_threshold(self) -> int:
-        """Return ALS high threshold window setting"""
-        reg_val = self.read_register(0x01, 2)
-        return _unpack("H", reg_val)[0]
-
-    def get_low_threshold(self) -> int:
-        """Return ALS low threshold window setting"""
-        reg_val = self.read_register(0x02, 2)
-        return _unpack("H", reg_val)[0]
-
-    @property
-    def last_raw(self) -> int:
-        return self._last_raw_ill
-
-    @property
-    def gain(self) -> tuple[int, float]:
-        """Возвращает коэффициент усиления (raw_gain, gain)"""
-        rg = self._als_gain
-        return rg, Veml7700._raw_gain_to_gain(rg)
-
-    @property
-    def integration_time(self) -> tuple[int, int]:
-        """Возвращает время интегрирования (raw_integration_time, integration_time_ms)"""
-        rit = self._als_it
-        return rit, self._get_integration_time(rit)
-
     def __iter__(self):
         return self
 
     def __next__(self) -> float:
         return self.get_illumination(raw=False)
-
-    @micropython.native
-    # def get_conversion_cycle_time(integration_time: int, power_save_enable: bool, power_save_mode: int) -> int:
-    def get_conversion_cycle_time(self, offset: int = 100) -> int:
-        """Return conversion cycle time in [ms].
-        Without using the power-saving feature (PSM_EN = 0), the controller has to wait before reading out
-        measurement results, at least for the programmed integration time. For example, for ALS_IT = 100 ms a wait time
-        of ≥ 100 ms is needed. A more simple way of continuous measurements can be realized by activating the PSM feature,
-        setting PSM_EN = 1."""
-        base = 25 * 2 ** self._als_it
-        if not self._enable_psm:
-            return base
-
-        return offset + base + 500 * (2 ** self._psm)
