@@ -27,15 +27,6 @@ class Veml7700:
     INTEGRATION_TIME = (25, 50, 100, 200, 400, 800)
     _IT = 12, 8, 0, 1, 2, 3  # integration time const
 
-
-    @staticmethod
-    def get_max_possible_illumination(gain: int, it: int) -> float:
-        raw_it = math.log2(it / 25)
-        _g_base = 0.125
-        _max_ill = 120796
-        _k = gain / _g_base
-        return (_max_ill / 2 ** raw_it) / _k
-
     def __init__(self, i2c: I2C, address: int = 0x10):
         self._i2c = i2c
         self.address = address
@@ -64,7 +55,8 @@ class Veml7700:
         gain_mapper = {1:0, 2:1, 0.125:2, 0.25: 3}
         als_gain = gain_mapper[self._gain]
 
-        als_it = 0
+        als_it = int(math.log2(self._it/25))
+
         als_pers = 0
         als_int_en = False
         als_shutdown = False
@@ -136,6 +128,13 @@ class Veml7700:
         _max_res = 1.8432
         _k = self._gain / _g_base
         return (_max_res / 2 ** raw_it) / _k
+
+    def get_max_possible_illumination(self) -> float:
+        raw_it = math.log2(self._it / 25)
+        _g_base = 0.125
+        _max_ill = 120796
+        _k = self._gain / _g_base
+        return (_max_ill / 2 ** raw_it) / _k
 
     def __iter__(self):
         return self
