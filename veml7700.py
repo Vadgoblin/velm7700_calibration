@@ -25,53 +25,15 @@ class Veml7700:
 
     GAIN = (0.125, 0.25, 1, 2)
     INTEGRATION_TIME = (25, 50, 100, 200, 400, 800)
-
     _IT = 12, 8, 0, 1, 2, 3  # integration time const
 
-    @staticmethod
-    def _it_to_raw_it(it: int) -> int:
-        """Возвращает сырое значение времени интегрирования (для битового поля в регистре),
-        соответствующее it - integration_time.
-        Спасибо вам, разработчики, за дополнительные трудности!
-        it                  return_value    integration_time_ms
-        0                   12              25
-        1                   8               50
-        2                   0               100
-        3                   1               200
-        4                   2               400
-        5                   3               800
-        """
-        return Veml7700._IT[it]
 
     @staticmethod
-    def _get_integration_time(raw_it: int) -> int:
-        """Возвращает время интегрирования, в миллисекундах, по сырому значению raw_it (0..5)"""
-        return 25 * 2 ** raw_it
-
-    @staticmethod
-    def _raw_gain_to_gain(raw_gain: int) -> float:
-        """Преобразует сырое значение усиления (0..3) в коэффициент усиления"""
-        _g = 1, 2, 0.125, 0.25
-        return _g[raw_gain]
-
-    @staticmethod
-    def _check_gain(_gain: float) -> float:
-        """Проверяет коэффициент усиления на правильность"""
-        _gains = 0.125, 0.25, 1, 2
-        if not _gain in _gains:
-            raise ValueError(f"Invalid _gain value: {_gain}")
-        return _gain
-
-
-    @staticmethod
-    def get_max_possible_illumination(raw_gain: int, raw_it: int) -> float:
-        """Возвращает максимально возможный уровень освещенности в lux в
-        зависимости от сырого значения усиления (raw_gain 0..3) и времени интегрирования (сырое значение 0..5) """
-        #
-        _gain = Veml7700._raw_gain_to_gain(raw_gain)
+    def get_max_possible_illumination(gain: int, it: int) -> float:
+        raw_it = math.log2(it / 25)
         _g_base = 0.125
         _max_ill = 120796
-        _k = _gain / _g_base
+        _k = gain / _g_base
         return (_max_ill / 2 ** raw_it) / _k
 
     @staticmethod
@@ -87,9 +49,6 @@ class Veml7700:
         self.address = address
         self._gain = 1
         self._it = 200
-
-        self._enable_psm = False  # Enable power save mode for sensor
-        self._psm = 0  # power save mode for sensor 0..3
 
     def set_gain(self, new_gain):
         if new_gain not in self.GAIN:
@@ -117,7 +76,7 @@ class Veml7700:
         als_pers = 0
         als_int_en = False
         als_shutdown = False
-        self.set_config_als(als_gain,als_it, als_pers,als_int_en,als_shutdown)
+        self._set_config_als(als_gain, als_it, als_pers, als_int_en, als_shutdown)
 
     def write_register(self, reg_addr: int, value: int, bytes_count: int) -> None:
         buf = value.to_bytes(bytes_count, "little")
@@ -126,23 +85,23 @@ class Veml7700:
     def read_register(self, reg_addr: int, bytes_count: int) -> bytes:
         return self._i2c.readfrom_mem(self.address, reg_addr, bytes_count)
 
-    def set_config_als(self, gain: int, integration_time: int, persistence: int = 1,
-                       interrupt_enable: bool = False, shutdown: bool = False):
+    def _set_config_als(self, gain: int, integration_time: int, persistence: int = 1,
+                        interrupt_enable: bool = False, shutdown: bool = False):
         """Setting Ambient Light Sensor (ALS) parameters.
         gain = 0..3; 0-gain=1, 1-gain=2, 2-gain=0.125(1/8), 3-gain=0.25(1/4).
         integration_time = 0..5; 0-25 ms; 1-50 ms; 2-100 ms, 3-200 ms, 4-400 ms, 5-800 ms
         persistence protect number = 0..3; 0-1, 1-2, 2-4, 3-8
         """
         _cfg = 0
-        # перед любой перенастройкой, документация требует перевода датчика в режим ожидания
-        _bts = self.read_register(0x00, 2)  # читаю
+        _bts = self.read_register(0x00, 2)
         _cfg = _unpack("H", _bts)[0]
-        self.write_register(0x00, _cfg | 0x01, 2)  # записываю
+        self.write_register(0x00, _cfg | 0x01, 2)
 
         _cfg = 0
         gain = _check_value(gain, range(4), f"Invalid als gain value: {gain}")
         _tmp = _check_value(integration_time, range(6), f"Invalid als integration_time: {integration_time}")
-        it = Veml7700._it_to_raw_it(_tmp)  # integration_time
+
+        it = self._IT[_tmp]
 
         pers = _check_value(persistence, range(4), f"Invalid als persistence protect number: {persistence}")
         ie = 0
@@ -151,7 +110,6 @@ class Veml7700:
         sd = 0
         if shutdown:
             sd = 1
-        #
         _cfg |= sd
         _cfg |= ie << 1
         _cfg |= pers << 4
@@ -160,47 +118,6 @@ class Veml7700:
 
         self.write_register(0x00, _cfg, 2)
 
-
-    # def get_config_als(self) -> None:
-    #     """read ALS config from register (2 byte)"""
-    #     reg_val = self.read_register(0x00, 2)
-    #     cfg = _unpack("H", reg_val)[0]  # unsigned short
-    #     #
-    #     tmp = (cfg & 0b0001_1000_0000_0000) >> 11  # gain
-    #     self._als_gain = tmp
-    #
-    #     tmp = (cfg & 0b0000_0011_1100_0000) >> 6  # integration time setting
-    #     self._als_it = Veml7700._raw_it_to_it(tmp)
-    #
-    #     tmp = (cfg & 0b0000_0000_0011_0000) >> 4  # persistence protect number setting
-    #     self._als_pers = tmp  # 2 ** tmp
-    #     #
-    #     self._als_int_en = bool(cfg & 0b0000_0000_0000_0010)
-    #     self._als_shutdown = bool(cfg & 0b0000_0000_0000_0001)
-
-    # def set_power_save_mode(self, enable_psm: bool, psm: int) -> None:
-    #     """Set power save mode for sensor.
-    #     enable_psm (Power saving mode enable): False - disable, True - enable
-    #     psm (Power saving mode; see table “Refresh time”): 0, 1, 2, 3
-    #     """
-    #     psm = _check_value(psm, range(4), f"Invalid power save mode value: {psm}")
-    #     reg_val = 0
-    #     reg_val |= int(enable_psm)
-    #     reg_val |= psm << 1
-    #     self.write_register(0x03, reg_val, 2)
-    #     self._enable_psm = enable_psm
-    #     self._psm = psm
-    #
-    # def get_interrupt_status(self) -> tuple:
-    #     """Return interrupt flags while trigger occurred due to data crossing low/high threshold windows.
-    #     tuple (low_threshold, high_threshold)."""
-    #     reg_val = self.read_register(0x06, 2)
-    #     irq_status = _unpack("H", reg_val)[0]  # unsigned short
-    #     # Bit 15 defines interrupt flag while trigger occurred due to data crossing low threshold windows.
-    #     int_th_low = bool(irq_status & 0b1000_0000_0000_0000)
-    #     # Bit 14 defines interrupt flag while trigger occurred due to data crossing high threshold windows.
-    #     int_th_high = bool(irq_status & 0b0100_0000_0000_0000)
-    #     return int_th_low, int_th_high
 
     def get_illumination(self, raw=False) -> float:
         """return illumination in lux"""
