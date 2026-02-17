@@ -36,14 +36,6 @@ class Veml7700:
         _k = gain / _g_base
         return (_max_ill / 2 ** raw_it) / _k
 
-    @staticmethod
-    def _get_resolution(gain: int, it: int) -> float:
-        raw_it = math.log2(it/25)
-        _g_base = 0.125
-        _max_res = 1.8432
-        _k = gain / _g_base
-        return (_max_res / 2 ** raw_it) / _k
-
     def __init__(self, i2c: I2C, address: int = 0x10):
         self._i2c = i2c
         self.address = address
@@ -118,22 +110,35 @@ class Veml7700:
 
         self.write_register(0x00, _cfg, 2)
 
+    def read_value(self):
+        raw_value = self._get_raw_value()
+        illumination = self._raw_to_illumination(raw_value)
+        white_channel = self._get_white_channel()
 
-    def get_illumination(self, raw=False) -> float:
-        """return illumination in lux"""
+        return {"raw":raw_value, "illumination":illumination, "white_channel":white_channel}
+
+    def _get_raw_value(self):
         reg_val = self.read_register(0x04, 2)
         raw_lux = _unpack("H", reg_val)[0]
-        if raw:
-            return raw_lux
-        return raw_lux * Veml7700._get_resolution(self._gain, self._it)
+        return raw_lux
 
-    def get_white_channel(self):
+    def _get_white_channel(self):
         """Return white channel output data"""
         reg_val = self.read_register(0x05, 2)
         return _unpack("H", reg_val)[0]
 
+    def _raw_to_illumination(self, raw_value) -> float:
+        return raw_value * self._get_resolution()
+
+    def _get_resolution(self) -> float:
+        raw_it = math.log2(self._it/25)
+        _g_base = 0.125
+        _max_res = 1.8432
+        _k = self._gain / _g_base
+        return (_max_res / 2 ** raw_it) / _k
+
     def __iter__(self):
         return self
 
-    def __next__(self) -> float:
-        return self.get_illumination(raw=False)
+    def __next__(self):
+        return self.read_value()

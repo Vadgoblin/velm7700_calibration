@@ -16,10 +16,14 @@ if __name__ == '__main__':
     delay = old_lux = curr_max = 1
     # mpi = Veml7700.get_max_possible_illumination(sol.get_gain(), sol.get_it())
 
-    for lux in sol:
-        wh = sol.get_white_channel()
+    for measurement in sol:
         delay = sol.get_it()
-        print(f"Illum. [lux]: {lux}\traw: \twhite ch.: {wh}\tdelay: {delay} [ms]")
+
+        raw = measurement["raw"]
+        lux = measurement["illumination"]
+        white = measurement["white_channel"]
+
+        print(f"Illum. [lux]: {lux}\traw: {raw}\twhite ch.: {white}\tdelay: {delay} [ms]")
 
         # if lux > 0.95 * mpi:
         #     print("Too bright, change settings!")
