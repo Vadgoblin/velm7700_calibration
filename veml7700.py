@@ -136,6 +136,11 @@ class Veml7700:
         _k = self._gain / _g_base
         return (_max_ill / 2 ** raw_it) / _k
 
+    ADC_MAX = 65535
+
+    def get_max_possible_illumination2(self) -> float:
+        return self._get_resolution() * self.ADC_MAX
+
     def __iter__(self):
         return self
 
