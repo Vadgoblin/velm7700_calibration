@@ -1,7 +1,7 @@
 import json
 import plotly.graph_objects as go
 
-JSON_PATH = "../measurements/2.json"
+JSON_PATH = "../measurements/4.json"
 with open(JSON_PATH,"r") as file:
     json_string = file.read()
 
@@ -15,7 +15,7 @@ def plot_plotly_3d(json_data):
         it, gain = json.loads(key_str)
         raw = metrics["raw_avg"]
 
-        if raw >= 65535:
+        if raw >= 65535 or raw <= 5:
             continue
 
         norm_raw = raw / (it * gain)
