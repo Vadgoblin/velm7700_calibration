@@ -2,13 +2,8 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-JSON_PATH = "../measurements/6.json"
-with open(JSON_PATH,"r") as file:
-    json_string = file.read()
 
-image_path = JSON_PATH.replace('.json','.png')
-
-def plot_zoomed_3d_measurements(json_data, use_normalized=True):
+def plot_zoomed_3d_measurements(json_data, image_path: str, use_normalized=True):
     data = json.loads(json_data)
 
     # --- Map actual values to evenly spaced index positions ---
@@ -91,5 +86,14 @@ def plot_zoomed_3d_measurements(json_data, use_normalized=True):
     plt.show()
 
 
+def plot_and_save_by_id(id:int):
+    json_path = f"../measurements/{id}.json"
+    with open(json_path, "r") as file:
+        json_string = file.read()
+
+    image_path = f"../figures/measurement_3d/{id}.png"
+
+    plot_zoomed_3d_measurements(json_string, image_path)
+
 if __name__ == "__main__":
-    plot_zoomed_3d_measurements(json_string, use_normalized=True)
+    plot_and_save_by_id(4)
