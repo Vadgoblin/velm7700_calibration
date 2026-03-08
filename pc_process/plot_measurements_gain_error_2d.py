@@ -35,7 +35,7 @@ def plot_gain_differences(directory="measurements"):
             it, gain = json.loads(key_str)
             raw = metrics.get("raw_avg", metrics.get("raw", 65535))
 
-            if raw >= 65535:
+            if 5 >= raw >= 65535:
                 continue
 
             norm_raw = raw / (it * gain)
