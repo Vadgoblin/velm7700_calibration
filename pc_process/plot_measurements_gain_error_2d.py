@@ -35,7 +35,7 @@ def plot_gain_differences(directory="measurements"):
             it, gain = json.loads(key_str)
             raw = metrics.get("raw_avg", metrics.get("raw", 65535))
 
-            if 5 >= raw >= 65535:
+            if raw >= 65535 or raw <= 5:
                 continue
 
             norm_raw = raw / (it * gain)
@@ -90,7 +90,7 @@ def plot_gain_differences(directory="measurements"):
 
     # symlog handles both positive and negative differences.
     # linthresh determines how close to 0 it stays linear before curving into log scale.
-    plt.yscale('symlog', linthresh=1.0)
+    plt.yscale('symlog', linthresh=0.5)
 
     plt.grid(True, which="both", linestyle=':', alpha=0.6)
     plt.legend(title="Settings", fontsize=11, title_fontsize=12)
