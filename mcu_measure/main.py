@@ -35,10 +35,10 @@ for i in range(10,0,-1):
 print("start")
 
 measurements = {}
-for duty in range(0,101,10):
+for duty in range(42,151,5):
+    duty = (duty/1000) ** 2.2
     print(duty)
-    pwm.duty_u16(int(duty * 65535 / 100))
-
+    pwm.duty_u16(int(duty * 65535))
     measure_and_save()
 
 
