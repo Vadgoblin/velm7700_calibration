@@ -96,4 +96,4 @@ def plot_and_save_by_id(id:int):
     plot_zoomed_3d_measurements(json_string, image_path)
 
 if __name__ == "__main__":
-    plot_and_save_by_id(4)
+    plot_and_save_by_id(7)
