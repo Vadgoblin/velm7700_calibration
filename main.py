@@ -2,6 +2,7 @@ from machine import Pin
 from multi_veml7700 import MultiVeml7700
 from time import sleep_ms, sleep
 from average_sensor_readings import average_sensor_readings
+from save_measurement import save_measurement
 
 if __name__ == '__main__':
     multi_veml = MultiVeml7700(0, scl=Pin(9), sda=Pin(8), freq=400_000, count=3)
@@ -23,7 +24,7 @@ if __name__ == '__main__':
 
             measurements[(it,gain)] = measurement_avg
 
-    print(measurements)
+    save_measurement(measurements)
     p = Pin(8,mode=Pin.OUT)
     p.value(0)
 
