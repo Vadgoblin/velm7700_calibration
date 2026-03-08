@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 
 
 def plot_gain_differences(directory="measurements"):
-    # Dictionary to hold the X and Y data for each gain
     gains_data = {
         0.125: {'x': [], 'y': []},
         0.25: {'x': [], 'y': []},
@@ -34,12 +33,9 @@ def plot_gain_differences(directory="measurements"):
         # 2. Extract valid readings
         for key_str, metrics in data.items():
             it, gain = json.loads(key_str)
-
-            # Grabs 'raw_avg' from your new script, falls back to 'raw' just in case
             raw = metrics.get("raw_avg", metrics.get("raw", 65535))
 
-            # Discard hardware saturation
-            if 5 >= raw >= 65535:
+            if raw >= 65535:
                 continue
 
             norm_raw = raw / (it * gain)
@@ -51,15 +47,13 @@ def plot_gain_differences(directory="measurements"):
         if not all_valid_norms:
             continue
 
-        # 3. Calculate X-Axis: The overall average normalized raw for this specific room
+        # 3. Calculate X-Axis (Overall File Average)
         file_avg_norm = sum(all_valid_norms) / len(all_valid_norms)
 
-        # 4. Calculate Y-Axis: The absolute difference for each gain
+        # 4. Calculate Y-Axis (Difference from File Average)
         for gain, norms in gain_specific_norms.items():
-            if norms:  # If this gain had valid, un-saturated readings
+            if norms:
                 gain_avg_norm = sum(norms) / len(norms)
-
-                # The exact difference you requested
                 difference = gain_avg_norm - file_avg_norm
 
                 gains_data[gain]['x'].append(file_avg_norm)
@@ -85,22 +79,24 @@ def plot_gain_differences(directory="measurements"):
             linewidth=0.5
         )
 
-    # The perfect center line where gain average = file average
-    plt.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.8, label="Zero Difference (Perfect)")
+    plt.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.8, label="Zero Difference")
 
-    plt.title("Hardware Discrepancy: Gain Average vs. Overall Room Average", fontsize=15, fontweight='bold')
-    plt.xlabel("Overall Average Normalized Raw (Light Level)", fontsize=13)
-    plt.ylabel("Difference (Gain Avg - Overall Avg)", fontsize=13)
+    plt.title("Hardware Discrepancy (Log/SymLog Scale)", fontsize=15, fontweight='bold')
+    plt.xlabel("Overall Average Normalized Raw (Log Scale)", fontsize=13)
+    plt.ylabel("Difference from Average (SymLog Scale)", fontsize=13)
 
-    # Log scale is crucial here so the dim rooms and bright rooms don't overlap
+    # --- The Dual Log Scales ---
     plt.xscale('log')
+
+    # symlog handles both positive and negative differences.
+    # linthresh determines how close to 0 it stays linear before curving into log scale.
+    plt.yscale('symlog', linthresh=1.0)
 
     plt.grid(True, which="both", linestyle=':', alpha=0.6)
     plt.legend(title="Settings", fontsize=11, title_fontsize=12)
 
     plt.tight_layout()
     plt.show()
-
 
 if __name__ == "__main__":
     plot_gain_differences(directory="../measurements")
