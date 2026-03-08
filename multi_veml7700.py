@@ -28,6 +28,7 @@ class MultiVeml7700:
     def read_values(self):
         values = {}
         for i in range(len(self._sensors)):
+            self._multiplexer.select(i)
             sensor = self._sensors[i]
             values[i] = sensor.read_value()
 

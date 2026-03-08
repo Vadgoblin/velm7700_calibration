@@ -121,6 +121,17 @@ class Veml7700:
 
     def _raw_to_illumination(self, raw_value) -> float:
         return raw_value * self._get_resolution()
+        # lux = raw_value * self._get_resolution()
+        #
+        # # 2. Apply Vishay's non-linear polynomial correction
+        # # (Required to flatten the photodiode's curve)
+        # lux_corrected = (
+        #         (6.0135e-13 * lux ** 4) -
+        #         (9.3924e-09 * lux ** 3) +
+        #         (8.1488e-05 * lux ** 2) +
+        #         (1.0023 * lux)
+        # )
+        # return lux_corrected
 
     def _get_resolution(self) -> float:
         raw_it = math.log2(self._it/25)
