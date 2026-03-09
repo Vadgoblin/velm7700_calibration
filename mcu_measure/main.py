@@ -5,6 +5,9 @@ from save_measurements import save_measurements
 
 import sdcard, os, vfs
 
+ERROR_LED = Pin(21, mode=Pin.OUT)
+ERROR_LED.value(0)
+
 # Constants
 SPI_BUS = 1
 SCK_PIN = 7
@@ -13,22 +16,33 @@ MISO_PIN = 5
 CS_PIN = 1
 SD_MOUNT_PATH = '/sd'
 
+
+# --- SD Card Setup ---
 try:
-    # Init SPI communication
     spi = SPI(SPI_BUS, sck=Pin(SCK_PIN), mosi=Pin(MOSI_PIN), miso=Pin(MISO_PIN))
     cs = Pin(CS_PIN)
     sd = sdcard.SDCard(spi, cs)
-    # Mount microSD card
     vfs.mount(sd, SD_MOUNT_PATH)
-    # List files on the microSD card
     print(os.listdir(SD_MOUNT_PATH))
 
 except Exception as e:
-    print('An error occurred:', e)
+    print('SD Card Error:', e)
+    # Blink endlessly if the SD card fails (since we can't save anyway)
+    while True:
+        ERROR_LED.value(1)
+        sleep(0.5)
+        ERROR_LED.value(0)
+        sleep(0.5)
 
 
-i2c = I2C(0, scl=Pin(9), sda=Pin(8), freq=400_000)
-veml = Veml7700(i2c)
+# --- Sensor Setup ---
+def init_sensor():
+    """Initializes and returns the sensor object so we can easily reboot it on failure."""
+    i2c = I2C(0, scl=Pin(9), sda=Pin(8), freq=400_000)
+    return Veml7700(i2c)
+
+
+veml = init_sensor()
 
 
 def measure_and_save():
@@ -42,7 +56,31 @@ def measure_and_save():
             raw = veml.read_value()["raw"]
             measurements[(it, gain)] = raw
 
-    save_measurements(measurements,directory="/sd/measurements")
+    save_measurements(measurements, directory="/sd/measurements")
+    print("Measurement saved successfully.")
 
+
+# --- The Bulletproof Loop ---
 while True:
-    measure_and_save()
+    try:
+        measure_and_save()
+
+    except Exception as e:
+        print(f"Crash detected! Error: {e}")
+
+        # 1. Blink twice quickly to signal an error
+        for _ in range(2):
+            ERROR_LED.value(1)
+            sleep(0.3)
+            ERROR_LED.value(0)
+            sleep(0.3)
+
+        # 2. Wait a moment to let the hardware settle
+        sleep(1)
+
+        # 3. Reboot the sensor (fixes I2C lockups)
+        try:
+            print("Attempting to re-initialize sensor...")
+            veml = init_sensor()
+        except Exception as reinit_error:
+            print(f"Failed to reboot sensor: {reinit_error}")
