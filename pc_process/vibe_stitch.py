@@ -128,7 +128,7 @@ def plot_stitched_curve(directory="measurements"):
 
     plt.title("The Perfect Sweep: Seamlessly Stitched LED Brightness Curve", fontsize=16, fontweight='bold')
     plt.xlabel("Measurement Sequence (Dim to Bright)", fontsize=14)
-    plt.ylabel("Stitched Raw Light Output (Log Scale)", fontsize=14)
+    plt.ylabel("Stitched Raw Light Output (log)", fontsize=14)
 
     plt.yscale('log')
     plt.grid(True, which="both", linestyle=':', alpha=0.6)
@@ -140,4 +140,4 @@ def plot_stitched_curve(directory="measurements"):
 if __name__ == "__main__":
     # plot_stitched_curve(directory="../measurements_combined")
     # plot_stitched_curve(directory="../measurements_0-100_step10")
-    plot_stitched_curve(directory="../measurements_0-small_step-snall")
+    plot_stitched_curve(directory="../measurements_full_gamma_sweep")
