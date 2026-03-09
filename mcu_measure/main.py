@@ -12,6 +12,7 @@ pwm.freq(5000)
 
 
 def measure_and_save():
+    measurements = {}
     for it in (25, 50, 100, 200, 400, 800):
         veml.set_it(it)
         for gain in (0.125, 0.25, 1, 2):
@@ -29,18 +30,24 @@ def measure_and_save():
     save_measurements(measurements)
 
 
-for i in range(10,0,-1):
+for i in range(60,0,-1):
     print(i)
     sleep(1)
 print("start")
 
-measurements = {}
-for duty in range(42,151,5):
-    duty = (duty/1000) ** 2.2
-    print(duty)
-    pwm.duty_u16(int(duty * 65535))
-    measure_and_save()
 
+
+steps = 100
+gamma = 2.2
+
+for i in range(steps + 1):
+    x = i / steps
+    duty = int((x ** gamma) * 65535)
+    pwm.duty_u16(duty)
+    sleep(2)
+    print(duty)
+    measure_and_save()
+    sleep(0.5)
 
 # turn on built in led to signal that the measurement is finished
 pin = Pin(8, mode=Pin.OUT)
