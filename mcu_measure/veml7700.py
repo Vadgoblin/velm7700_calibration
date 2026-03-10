@@ -102,6 +102,20 @@ class Veml7700:
 
         self.write_register(0x00, _cfg, 2)
 
+    def power_off(self):
+        """Halts the internal integration clock."""
+        _bts = self.read_register(0x00, 2)
+        _cfg = _unpack("H", _bts)[0]
+        # Set bit 0 (ALS_SD = 1) to shut down
+        self.write_register(0x00, _cfg | 0x01, 2)
+
+    def power_on(self):
+        """Wakes up the sensor, forcing a fresh integration cycle."""
+        _bts = self.read_register(0x00, 2)
+        _cfg = _unpack("H", _bts)[0]
+        # Clear bit 0 (ALS_SD = 0) to wake up
+        self.write_register(0x00, _cfg & ~0x01, 2)
+
     def read_value(self):
         raw_value = self._get_raw_value()
         illumination = self._raw_to_illumination(raw_value)
