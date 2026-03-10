@@ -132,5 +132,5 @@ def plot_all_points_diff(directory, image_path):
 
 
 if __name__ == "__main__":
-    image_path = "../figures/all_measurements/gain_error_4x6.png"
+    image_path = "../figures/gain error/measurements_start_midday.png"
     plot_all_points_diff("../measurements", image_path)
