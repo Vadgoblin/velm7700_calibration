@@ -140,4 +140,4 @@ def plot_stitched_curve(directory="measurements"):
 if __name__ == "__main__":
     # plot_stitched_curve(directory="../measurements_combined")
     # plot_stitched_curve(directory="../measurements_0-100_step10")
-    plot_stitched_curve(directory="../measurements_full_gamma_sweep")
+    plot_stitched_curve(directory="../measurements_full_gamma_sweep_2")

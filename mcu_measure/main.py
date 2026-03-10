@@ -8,7 +8,7 @@ i2c = I2C(0, scl=Pin(9), sda=Pin(8), freq=400_000)
 veml = Veml7700(i2c)
 
 pwm = PWM(Pin(0))
-pwm.freq(5000)
+pwm.freq(500)
 
 
 def measure_and_save():
@@ -20,7 +20,7 @@ def measure_and_save():
             sleep_ms(it * 2)
 
             raws = []
-            for _ in range(5):
+            for _ in range(30):
                 sleep_ms(it)
                 raw = veml.read_value()["raw"]
                 raws.append(raw)
