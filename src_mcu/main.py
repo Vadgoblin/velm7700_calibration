@@ -10,14 +10,13 @@ pwm = PWM(Pin(0))
 pwm.freq(500)
 
 GEARS = [(400, 2.0), (100, 1.0), (50, 0.25), (25, 0.125)]
-SHIFT_THRESHOLD = 10000
 
 
 def read_dithered(it, gain):
     veml.set_it(it)
     veml.set_gain(gain)
     raws = []
-    for _ in range(10):
+    for _ in range(50):
         veml.power_off()
         sleep_ms(random.randint(1, 7))
         veml.power_on()
@@ -25,49 +24,41 @@ def read_dithered(it, gain):
         raws.append(veml.read_value()["raw"])
     return sum(raws) / len(raws)
 
+def read(it, gain):
+    veml.set_it(it)
+    veml.set_gain(gain)
+    sleep_ms(it * 2)
 
-def run_calibration():
-    print("Starting Automated Boundary Calibration...")
-    multipliers = [1.0]
-    current_gear = 0
-    current_pwm = 0
-
-    # We use a Gamma curve to increment the LED smoothly
-    for step in range(1000):  # 1000 very fine steps
-        x = step / 1000.0
-        current_pwm = int((x ** 2.2) * 65535)
-        pwm.duty_u16(current_pwm)
-
-        # Read the light in the current gear
-        raw = read_dithered(*GEARS[current_gear])
-
-        # Did we hit the boundary?
-        if raw >= SHIFT_THRESHOLD:
-            if current_gear < len(GEARS) - 1:
-                print(f"Boundary hit at PWM {current_pwm}. Calculating ratio...")
-
-                # We are frozen right at the ~10,000 threshold.
-                # Calculate the exact light value using the current gear.
-                true_light_before_shift = raw * multipliers[current_gear]
-
-                # Shift to the NEXT gear and take a reading of the exact same light
-                next_gear_raw = read_dithered(*GEARS[current_gear + 1])
-
-                # Calculate the exact multiplier needed to bridge the gap
-                new_multiplier = true_light_before_shift / next_gear_raw
-                multipliers.append(new_multiplier)
-
-                print(f"Gear {current_gear + 1} Multiplier Locked: {new_multiplier:.4f}")
-                current_gear += 1
-            else:
-                break  # We calibrated all gears!
-
-    pwm.duty_u16(0)
-    print("\n--- CALIBRATION COMPLETE ---")
-    print(f"Save these multipliers for this specific sensor:")
-    print(f"SENSOR_MULTIPLIERS = {multipliers}")
+    raws = []
+    for _ in range(10):
+        raws.append(veml.read_value()["raw"])
+    return sum(raws) / len(raws)
 
 
-run_calibration()
+# STEPS_TOTAL = 200
+# measurements = {}
+#
+# for step in range(STEPS_TOTAL):
+#     print(step)
+#
+#     x = step / STEPS_TOTAL
+#     current_pwm = int((x ** 2.2) * 65535)
+#     pwm.duty_u16(current_pwm)
+#
+#     l = {}
+#     for i in range(len(GEARS)):
+#         raw = read_dithered(*GEARS[i])
+#         l[i] = raw
+#
+#     measurements[step] = l
+#
+# print(measurements)
 
-# SENSOR_MULTIPLIERS = [1.0, 7.9904016, 13.178978, 53.42643]
+
+pwm.duty_u16(int(65535 * 0.5))
+for _ in range(5):
+    for i in range(len(GEARS)):
+        raw = read_dithered(*GEARS[i])
+        print(i, raw)
+
+    print()
