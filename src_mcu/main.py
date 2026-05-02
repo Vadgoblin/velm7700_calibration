@@ -1,7 +1,7 @@
 from time import sleep_ms
 import random
 from machine import I2C, Pin, PWM
-from veml7700 import Veml7700  # Your custom class
+from veml7700 import Veml7700
 
 # --- HARDWARE SETUP ---
 i2c = I2C(0, scl=Pin(9), sda=Pin(8), freq=400_000)
@@ -13,61 +13,76 @@ GEARS = [(400, 2.0), (100, 1.0), (50, 0.25), (25, 0.125)]
 SHIFT_THRESHOLD = 10000
 
 
-def read_dithered(it, gain):
+def read_dithered(it, gain, samples=20):
     veml.set_it(it)
     veml.set_gain(gain)
     raws = []
-    for _ in range(10):
+    for _ in range(samples):
         veml.power_off()
         sleep_ms(random.randint(1, 7))
         veml.power_on()
-        sleep_ms(it * 2)  # Give it time to integrate
+        sleep_ms(it * 2)
         raws.append(veml.read_value()["raw"])
     return sum(raws) / len(raws)
 
 
-def run_calibration():
-    print("Starting Automated Boundary Calibration...")
+def run_binary_calibration():
+    print("Starting Lightning-Fast Binary Calibration...")
     multipliers = [1.0]
-    current_gear = 0
-    current_pwm = 0
 
-    # We use a Gamma curve to increment the LED smoothly
-    for step in range(1000):  # 1000 very fine steps
-        x = step / 1000.0
-        current_pwm = int((x ** 2.2) * 65535)
-        pwm.duty_u16(current_pwm)
+    for current_gear in range(len(GEARS) - 1):
+        print(f"\nHunting for Gear {current_gear} -> {current_gear + 1} boundary...")
 
-        # Read the light in the current gear
-        raw = read_dithered(*GEARS[current_gear])
+        low_pwm = 0
+        high_pwm = 65535
+        best_pwm = 0
+        it, gain = GEARS[current_gear]
 
-        # Did we hit the boundary?
-        if raw >= SHIFT_THRESHOLD:
-            if current_gear < len(GEARS) - 1:
-                print(f"Boundary hit at PWM {current_pwm}. Calculating ratio...")
+        for step in range(13):
+            mid_pwm = (low_pwm + high_pwm) // 2
+            pwm.duty_u16(mid_pwm)
 
-                # We are frozen right at the ~10,000 threshold.
-                # Calculate the exact light value using the current gear.
-                true_light_before_shift = raw * multipliers[current_gear]
+            # CRITICAL: Wait for the sensor to flush the old light!
+            # We wait 3x the integration time to ensure a perfectly clean new frame.
+            sleep_ms(it * 3)
 
-                # Shift to the NEXT gear and take a reading of the exact same light
-                next_gear_raw = read_dithered(*GEARS[current_gear + 1])
+            # Read the current light
+            raw = read_dithered(it, gain, samples=10)
+            print(f"  Step {step + 1}/16 | PWM: {mid_pwm} | Raw: {raw:.1f}")
 
-                # Calculate the exact multiplier needed to bridge the gap
-                new_multiplier = true_light_before_shift / next_gear_raw
-                multipliers.append(new_multiplier)
-
-                print(f"Gear {current_gear + 1} Multiplier Locked: {new_multiplier:.4f}")
-                current_gear += 1
+            # Binary Search Logic
+            if raw < SHIFT_THRESHOLD:
+                low_pwm = mid_pwm + 1  # Too dim, search the upper half
             else:
-                break  # We calibrated all gears!
+                high_pwm = mid_pwm - 1  # Too bright, search the lower half
+                best_pwm = mid_pwm  # Save this as our closest overshoot
+
+        # --- CALCULATION ---
+        # The binary search has narrowed in on the exact PWM where the light crosses 10,000.
+        print(f"Target locked at PWM {best_pwm}. Calculating ratio...")
+
+        # 1. Set the exact boundary PWM
+        pwm.duty_u16(best_pwm)
+        sleep_ms(it * 3)
+
+        # 2. Get the highly accurate, 50-sample dithered reading in the CURRENT gear
+        raw_before = read_dithered(*GEARS[current_gear], samples=50)
+        true_light = raw_before * multipliers[current_gear]
+
+        # 3. Shift to the NEXT gear, wait for it to settle, and read the SAME physical light
+        next_it, next_gain = GEARS[current_gear + 1]
+        sleep_ms(next_it * 3)
+        raw_after = read_dithered(next_it, next_gain, samples=50)
+
+        # 4. Calculate the  multiplier
+        new_multiplier = true_light / raw_after
+        multipliers.append(new_multiplier)
+
+        print(f"Gear {current_gear + 1} Multiplier Locked: {new_multiplier:.4f}")
 
     pwm.duty_u16(0)
-    print("\n--- CALIBRATION COMPLETE ---")
-    print(f"Save these multipliers for this specific sensor:")
+    print("\n--- BINARY CALIBRATION COMPLETE ---")
     print(f"SENSOR_MULTIPLIERS = {multipliers}")
 
 
-run_calibration()
-
-# SENSOR_MULTIPLIERS = [1.0, 7.9904016, 13.178978, 53.42643]
+run_binary_calibration()
