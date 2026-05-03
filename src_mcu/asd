@@ -1,0 +1,24 @@
+#10step
+# GEAR_MULTIPLIERS = [
+#         1.0     # gear 0
+#         8.010314        # gear 1
+#         13.142853       # gear 2
+#         52.334328       # gear 3
+# ]
+
+
+# 30 steo
+# GEAR_MULTIPLIERS = [
+#         1.0,    # gear 0
+#         7.980583,       # gear 1
+#         12.973032,      # gear 2
+#         52.305232,      # gear 3
+# ]
+
+# 200 step
+# GEAR_MULTIPLIERS = [
+#         1.0,                    # gear 0
+#         8.012411,                       # gear 1
+#         13.219624,                      # gear 2
+#         52.85125,                       # gear 3
+# ]
