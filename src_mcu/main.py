@@ -27,6 +27,8 @@ def read_dithered(it, gain, samples=20):
 
 
 def run_binary_calibration():
+    STEPS = 13
+
     print("Starting Lightning-Fast Binary Calibration...")
     multipliers = [1.0]
 
@@ -38,7 +40,7 @@ def run_binary_calibration():
         best_pwm = 0
         it, gain = GEARS[current_gear]
 
-        for step in range(13):
+        for step in range(STEPS):
             mid_pwm = (low_pwm + high_pwm) // 2
             pwm.duty_u16(mid_pwm)
 
@@ -48,7 +50,7 @@ def run_binary_calibration():
 
             # Read the current light
             raw = read_dithered(it, gain, samples=10)
-            print(f"  Step {step + 1}/16 | PWM: {mid_pwm} | Raw: {raw:.1f}")
+            print(f"  Step {step + 1}/{STEPS} | PWM: {mid_pwm} | Raw: {raw:.1f}")
 
             # Binary Search Logic
             if raw < SHIFT_THRESHOLD:
@@ -86,3 +88,7 @@ def run_binary_calibration():
 
 
 run_binary_calibration()
+
+# SENSOR_MULTIPLIERS = [1.0, 7.990809, 13.108759, 52.43662]
+# SENSOR_MULTIPLIERS = [1.0, 7.991282, 13.067235, 52.66941]
+# SENSOR_MULTIPLIERS = [1.0, 7.99144368, 13.066542, 51.876304]
