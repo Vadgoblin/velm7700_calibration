@@ -88,7 +88,3 @@ def run_binary_calibration():
 
 
 run_binary_calibration()
-
-# SENSOR_MULTIPLIERS = [1.0, 7.990809, 13.108759, 52.43662]
-# SENSOR_MULTIPLIERS = [1.0, 7.991282, 13.067235, 52.66941]
-# SENSOR_MULTIPLIERS = [1.0, 7.99144368, 13.066542, 51.876304]
